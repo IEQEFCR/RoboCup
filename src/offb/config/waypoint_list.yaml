@@ -1,0 +1,31 @@
+x1: 0
+y1: -3.5
+
+x2: 2.5
+y2: -3.5
+
+x3: 2.5
+y3: 0
+
+x4: 1.960
+y4: -1.6
+
+x5: 3.92
+y5: -1.6
+
+x6: 5.88
+y6: -1.6
+
+left_land_x: 0
+left_land_y: 1.6
+
+right_land_x: 0
+right_land_y: -1.6
+
+qrcode_x: 5.08
+qrcode_y: 0
+
+fly_height: 1.4
+drop_height: 0.4
+
+camera_channel: 0
