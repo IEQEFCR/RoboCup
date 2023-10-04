@@ -81,25 +81,25 @@ void pathCallback(const nav_msgs::Path::ConstPtr& path_msg) {
 //     is_detect=1;
 // }
 
-// void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_in)
-// {
-//     int count = scan_in->ranges.size(),min_index=0;
-//     scan.ranges.clear();
-//     float degree = scan_in->angle_min;
-//     float min = LASER_INF;
-//     for(int i = 0; i < count; i++){
-//         if(isnan(scan_in->ranges[i])||isinf(scan_in->ranges[i])||scan_in->ranges[i]<LASER_MIN)
-//             scan.ranges.push_back(LASER_INF);
-//         else scan.ranges.push_back(scan_in->ranges[i]);
-//         if(scan.ranges[i]<min) min=scan.ranges[i],min_index=i;
-//     }
-//     ROS_INFO("count = [%d]  min_distance = [%f]  , index =  [%d] \n",count,
-//     min, min_index);
-//     // for(int i = 0; i < count; i++){
-//     //     std::cout << isinf(scan_in->ranges[i]) << " \n";
-//     //     // scan.ranges.push_back(scan_in->ranges[i]);
-//     // }
-// }
+float min_distance = LASER_INF;
+
+void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
+    int count = scan_in->ranges.size(), min_index = 0;
+    scan.ranges.clear();
+    float degree = scan_in->angle_min;
+    float min = LASER_INF;
+
+    for (int i = 0; i < count; i++) {
+        if (isnan(scan_in->ranges[i]) || isinf(scan_in->ranges[i]) ||
+            scan_in->ranges[i] < LASER_MIN)
+            scan.ranges.push_back(LASER_INF);
+        else
+            scan.ranges.push_back(scan_in->ranges[i]);
+        if (scan_in->ranges[i] < min)
+            min = scan.ranges[i], min_index = i;
+    }
+    min_distance = min;
+}
 
 void pos_cb(const nav_msgs::Odometry::ConstPtr& odom_3d) {
     pos_drone.pose.position.x = odom_3d->pose.pose.position.x;
@@ -185,6 +185,9 @@ int main(int argc, char** argv) {
     ros::Publisher drop_pub =
         nh.advertise<std_msgs::String>("/drop", 10);  // 发布投放指令
     ros::Subscriber qr_sub = nh.subscribe<std_msgs::String>("/qr", 10, qr_cb);
+
+    ros::Subscriber scan_sub =
+        nh.subscribe<sensor_msgs::LaserScan>("/laser/scan", 10, scanCallback);
 
     ros::Subscriber dwa_sub =
         nh.subscribe<geometry_msgs::Twist>("/px4_vel", 10, dwa_cb);
@@ -334,9 +337,20 @@ int main(int argc, char** argv) {
                 // pose.pose.position.x = waypoint[1].x;
                 // pose.pose.position.y = waypoint[1].y;
                 pos_vel(vel, next_point.x, next_point.y);
+
+                ROS_INFO("min_distance : %f", min_distance);
+
+                // if (min_distance < 0.4) {
+                //     ROS_INFO("DANGER !!!");
+                //     vel.linear.x *= 0.5;
+                //     vel.linear.y *= 0.5;
+                // }
+
                 // vel.linear.x = dwa_vel_x;
                 // vel.linear.y = dwa_vel_y;
-                ROS_INFO("dwa: vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
+
+                ROS_INFO("vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
+
                 local_vel_pub.publish(vel);
 
                 // if (isget(waypoint[1], 0.1)) {
