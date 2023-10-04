@@ -3,7 +3,7 @@ raytrace_range: 5.0 #“raytrace_range”参数确定了用于清除指定范围
 #footprint: [[0.3, 0.3], [0.3, -0.3], [-0.3, -0.3], [-0.3, 0.3]]
 robot_radius: 0.3
 
-inflation_radius: 0.4 #中心点保持距离障碍物1米远
+inflation_radius: 0.4 #中心点保持距离障碍物0.4米远
 cost_scaling_factor: 3.0
 
 map_type: costmap

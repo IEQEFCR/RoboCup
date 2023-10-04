@@ -18,8 +18,8 @@
 
 #define LASER_MIN 0.3
 #define LASER_INF 20.0
-#define P_POS 0.9
-#define MAX_VEL 0.25
+#define P_POS 1.5
+#define MAX_VEL 0.35
 
 double r, p, y, x, yaw, z;
 double target_x, target_y;
@@ -136,6 +136,7 @@ void pos_vel(geometry_msgs::Twist& vel,
     vel.linear.x = (target_x - x) * P_POS;
     vel.linear.y = (target_y - y) * P_POS;
     vel.linear.z = (target_z - z) * P_POS;
+    vel.angular.z = -yaw * 0.5;
     if (fabs(vel.linear.x) > MAX_VEL)
         vel.linear.x = vel.linear.x < 0 ? -MAX_VEL : MAX_VEL;
     if (fabs(vel.linear.y) > MAX_VEL)
@@ -340,10 +341,10 @@ int main(int argc, char** argv) {
 
                 ROS_INFO("min_distance : %f", min_distance);
 
-                if (min_distance < 0.4) {
+                if (min_distance < 0.8) {
                     ROS_INFO("DANGER !!!");
-                    vel.linear.x *= 0.5;
-                    vel.linear.y *= 0.5;
+                    vel.linear.x *= min_distance / 0.8;
+                    vel.linear.y *= min_distance / 0.8;
                 }
 
                 // vel.linear.x = dwa_vel_x;
