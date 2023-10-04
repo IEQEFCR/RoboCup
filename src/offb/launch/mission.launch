@@ -1,6 +1,11 @@
 <?xml version="1.0"?>
 <launch>
+    <include file="$(find offboard)/launch/tf.launch">
+    </include>
+
     <rosparam command="load" file="$(find offboard)/config/waypoint_list.yaml" />
+
     <node pkg="offboard" type="offboard_node" respawn="false" name="offb_node" output="screen">
     </node>
+
 </launch>

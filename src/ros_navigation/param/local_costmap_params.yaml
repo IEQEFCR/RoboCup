@@ -1,14 +1,13 @@
 local_costmap:
-  global_frame: camera_odom_frame
+  global_frame: odom
   robot_base_frame: base_link
 
   update_frequency: 20.0
   publish_frequency: 5
-  transform_tolerance: 0.2  
+  transform_tolerance: 0.2
 
-  static_map: false  
+  static_map: false
   rolling_window: true
   width: 6.0
   height: 6.0
   resolution: 0.03
-  

@@ -146,11 +146,19 @@ void pos_vel(geometry_msgs::Twist& vel,
 
 bool isget_qr = 0;
 std::string qr_str;
+double dwa_vel_x = 0, dwa_vel_y = 0, dwa_vel_z = 0, dwa_vel_yaw = 0;
 
 void qr_cb(const std_msgs::String::ConstPtr& qr) {
     isget_qr = 1;
     qr_str = qr->data;
     // std::cout << qr_str << std::endl;
+}
+
+void dwa_cb(const geometry_msgs::Twist::ConstPtr& dwa_vel) {
+    dwa_vel_x = dwa_vel->linear.x;
+    dwa_vel_y = dwa_vel->linear.y;
+    dwa_vel_z = dwa_vel->linear.z;
+    dwa_vel_yaw = dwa_vel->angular.z;
 }
 
 int main(int argc, char** argv) {
@@ -177,6 +185,9 @@ int main(int argc, char** argv) {
     ros::Publisher drop_pub =
         nh.advertise<std_msgs::String>("/drop", 10);  // 发布投放指令
     ros::Subscriber qr_sub = nh.subscribe<std_msgs::String>("/qr", 10, qr_cb);
+
+    ros::Subscriber dwa_sub =
+        nh.subscribe<geometry_msgs::Twist>("/px4_vel", 10, dwa_cb);
 
     int camera_channel = 0;
 
@@ -323,7 +334,9 @@ int main(int argc, char** argv) {
                 // pose.pose.position.x = waypoint[1].x;
                 // pose.pose.position.y = waypoint[1].y;
                 pos_vel(vel, next_point.x, next_point.y);
-                ROS_INFO("vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
+                // vel.linear.x = dwa_vel_x;
+                // vel.linear.y = dwa_vel_y;
+                ROS_INFO("dwa: vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
                 local_vel_pub.publish(vel);
 
                 // if (isget(waypoint[1], 0.1)) {
