@@ -340,11 +340,11 @@ int main(int argc, char** argv) {
 
                 ROS_INFO("min_distance : %f", min_distance);
 
-                // if (min_distance < 0.4) {
-                //     ROS_INFO("DANGER !!!");
-                //     vel.linear.x *= 0.5;
-                //     vel.linear.y *= 0.5;
-                // }
+                if (min_distance < 0.4) {
+                    ROS_INFO("DANGER !!!");
+                    vel.linear.x *= 0.5;
+                    vel.linear.y *= 0.5;
+                }
 
                 // vel.linear.x = dwa_vel_x;
                 // vel.linear.y = dwa_vel_y;
