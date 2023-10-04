@@ -2,7 +2,7 @@
     <node pkg="tf" type="static_transform_publisher" name="odom_to_map" args="0.0 0.0 0 0.0 0.0 0.0 /map /odom 100" />
     <!-- Arguments -->
     <!-- Map server -->
-    <node pkg="map_server" name="map_server" type="map_server" args="$(find ros_navigation)/param/blank_map.yaml" />
+    <node pkg="map_server" name="map_server" type="map_server" args="$(find ros_navigation)/param/robocup.yaml" />
 
 
 </launch>
