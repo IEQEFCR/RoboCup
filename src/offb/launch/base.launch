@@ -1,5 +1,13 @@
 <?xml version="1.0"?>
 <launch>
+
+    <include file="$(find mavros)/launch/px4.launch">
+    </include>
+
+    <include file="$(find realsense2_camera)/launch/rs_t265.launch">
+    </include>
+
     <node pkg="offboard" type="t265_to_mavros" respawn="false" name="t265_to_mavros" output="screen">
     </node>
+    
 </launch>

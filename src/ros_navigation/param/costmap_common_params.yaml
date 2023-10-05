@@ -3,16 +3,16 @@ raytrace_range: 5.0 #“raytrace_range”参数确定了用于清除指定范围
 #footprint: [[0.3, 0.3], [0.3, -0.3], [-0.3, -0.3], [-0.3, 0.3]]
 robot_radius: 0.3
 
-inflation_radius: 0.4 #中心点保持距离障碍物0.4米远
+inflation_radius: 0.45 #中心点保持距离障碍物0.4米远
 cost_scaling_factor: 3.0
 
 map_type: costmap
 observation_sources: scan
 scan:
   {
-    sensor_frame: base_link,
+    sensor_frame: base_laser,
     data_type: LaserScan,
-    topic: /laser/scan,
+    topic: /scan,
     marking: true,
     clearing: true,
   }

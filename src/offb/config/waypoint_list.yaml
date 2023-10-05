@@ -25,7 +25,7 @@ right_land_y: -1.6
 qrcode_x: 5.08
 qrcode_y: 0
 
-fly_height: 0.4
+fly_height: 0.25
 drop_height: 0.4
 
 camera_channel: 0
