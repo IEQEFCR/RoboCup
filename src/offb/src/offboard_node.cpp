@@ -24,8 +24,10 @@
 double r, p, y, x, yaw, z;
 double target_x, target_y;
 int number = -1;
-double fly_height = 0.5, drop_height = 0.4;
+double fly_height = 0.5, drop_height = 0.4, min_distance = LASER_INF;
 bool is_detect = 0, got_plan = 0;
+bool is_visit[10] = {0};
+ros::Time last_detect_time;
 
 mavros_msgs::State current_state;  // 创建全局变量
 geometry_msgs::PoseStamped pos_drone;
@@ -49,6 +51,7 @@ struct point {
     double x;
     double y;
     double z;
+    point(double a, double b, double c) : x(a), y(b), z(c) {}
 } waypoint[10], left_land, right_land, qrcode;
 
 void state_cb(const mavros_msgs::State::ConstPtr& msg) {
@@ -58,21 +61,19 @@ void state_cb(const mavros_msgs::State::ConstPtr& msg) {
 point next_point;
 
 void pathCallback(const nav_msgs::Path::ConstPtr& path_msg) {
-    ROS_INFO("Received path with %zu poses.", path_msg->poses.size());
+    // ROS_INFO("Received path with %zu poses.", path_msg->poses.size());
     got_plan = true;
     for (size_t i = 0; i < path_msg->poses.size(); ++i) {
         double tx = path_msg->poses[i].pose.position.x;
         double ty = path_msg->poses[i].pose.position.y;
-        if ((tx - x) * (tx - x) + (ty - y) * (ty - y) > 0.07) {
+        if ((tx - x) * (tx - x) + (ty - y) * (ty - y) > 0.05) {
             next_point.x = tx;
             next_point.y = ty;
-            break;
+            return;
         }
-        // ROS_INFO("Pose %zu: [%f, %f, %f].", i,
-        //          path_msg->poses[i].pose.position.x,
-        //          path_msg->poses[i].pose.position.y,
-        //          path_msg->poses[i].pose.position.z);
     }
+    // next_point.x = path_msg->poses.back().pose.position.x;
+    // next_point.y = path_msg->poses.back().pose.position.y;
 }
 
 // void target_cb(const geometry_msgs::PoseStamped::ConstPtr& marker_pose){
@@ -80,8 +81,6 @@ void pathCallback(const nav_msgs::Path::ConstPtr& path_msg) {
 //     target_y = marker_pose->pose.position.y;
 //     is_detect=1;
 // }
-
-float min_distance = LASER_INF;
 
 void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_in) {
     int count = scan_in->ranges.size(), min_index = 0;
@@ -116,8 +115,9 @@ void pos_cb(const nav_msgs::Odometry::ConstPtr& odom_3d) {
 
 void target_cb(const geometry_msgs::PoseStamped::ConstPtr& marker_pose) {
     target_x = marker_pose->pose.position.x * z + 0.07;
-    target_y = marker_pose->pose.position.y * z + 0.02;
+    target_y = marker_pose->pose.position.y * z;
     number = (int)marker_pose->pose.position.z;
+    last_detect_time = ros::Time::now();
     if (number != -1)
         is_detect = 1;
 }
@@ -143,6 +143,8 @@ void pos_vel(geometry_msgs::Twist& vel,
         vel.linear.y = vel.linear.y < 0 ? -MAX_VEL : MAX_VEL;
     if (fabs(vel.linear.z) > MAX_VEL)
         vel.linear.z = vel.linear.z < 0 ? -MAX_VEL : MAX_VEL;
+    vel.linear.x *= 1.5;
+    vel.linear.y *= 1.5;
 }
 
 bool isget_qr = 0;
@@ -182,16 +184,21 @@ int main(int argc, char** argv) {
     ros::Subscriber position_sub = nh.subscribe<nav_msgs::Odometry>(
         "/mavros/local_position/odom", 100, pos_cb);
     ros::Subscriber target_sub =
-        nh.subscribe<geometry_msgs::PoseStamped>("/target", 10, target_cb);
+        nh.subscribe<geometry_msgs::PoseStamped>("/target", 3, target_cb);
     ros::Publisher drop_pub =
         nh.advertise<std_msgs::String>("/drop", 10);  // 发布投放指令
-    ros::Subscriber qr_sub = nh.subscribe<std_msgs::String>("/qr", 10, qr_cb);
+
+    ros::Publisher goal_pub =
+        nh.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 10);
+
+    // ros::Subscriber qr_sub = nh.subscribe<std_msgs::String>("/qr", 10,
+    // qr_cb);
 
     ros::Subscriber scan_sub =
-        nh.subscribe<sensor_msgs::LaserScan>("/laser/scan", 10, scanCallback);
+        nh.subscribe<sensor_msgs::LaserScan>("/scan", 10, scanCallback);
 
-    ros::Subscriber dwa_sub =
-        nh.subscribe<geometry_msgs::Twist>("/px4_vel", 10, dwa_cb);
+    // ros::Subscriber dwa_sub =
+    //     nh.subscribe<geometry_msgs::Twist>("/px4_vel", 10, dwa_cb);
 
     int camera_channel = 0;
 
@@ -199,6 +206,7 @@ int main(int argc, char** argv) {
         nh.param<double>("x" + std::to_string(i), waypoint[i].x, 0.0);
         nh.param<double>("y" + std::to_string(i), waypoint[i].y, 0.0);
     }
+
     nh.param<double>("fly_height", fly_height, 1.4);
     nh.param<double>("drop_height", drop_height, 0.4);
     nh.param<double>("left_land_x", left_land.x, 0.0);
@@ -215,11 +223,12 @@ int main(int argc, char** argv) {
     // ros print param above
     ROS_INFO("fly_height = %f", fly_height);
     ROS_INFO("drop_height = %f", drop_height);
-    ROS_INFO("left_land_x = %f, left_land_y = %f", left_land.x, left_land.y);
-    ROS_INFO("right_land_x = %f, right_land_y = %f", right_land.x,
-             right_land.y);
-    ROS_INFO("qrcode_x = %f, qrcode_y = %f", qrcode.x, qrcode.y);
-    ROS_INFO("camera_channel = %d", camera_channel);
+
+    // ROS_INFO("left_land_x = %f, left_land_y = %f", left_land.x, left_land.y);
+    // ROS_INFO("right_land_x = %f, right_land_y = %f", right_land.x,
+    //          right_land.y);
+    // ROS_INFO("qrcode_x = %f, qrcode_y = %f", qrcode.x, qrcode.y);
+    // ROS_INFO("camera_channel = %d", camera_channel);
 
     // cv::VideoCapture cap(camera_channel);
     // cap.set(CV_CAP_PROP_FRAME_WIDTH, 640);
@@ -236,33 +245,39 @@ int main(int argc, char** argv) {
 
     ros::Rate rate(20.0);
 
-    int mid_point[7][7] = {{0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
-                           {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
-                           {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
-                           {0, 0, 0, 0, 0, 0, 0}};
+    // int mid_point[7][7] = {{0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
+    //                        {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
+    //                        {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
+    //                        {0, 0, 0, 0, 0, 0, 0}};
 
-    mid_point[1][5] = mid_point[1][6] = 2;
-    mid_point[2][4] = 1;
-    mid_point[3][4] = 5;
-    mid_point[4][2] = mid_point[4][3] = 5;
-    mid_point[5][1] = 2;
-    mid_point[6][1] = 2;
+    // mid_point[1][5] = mid_point[1][6] = 2;
+    // mid_point[2][4] = 1;
+    // mid_point[3][4] = 5;
+    // mid_point[4][2] = mid_point[4][3] = 5;
+    // mid_point[5][1] = 2;
+    // mid_point[6][1] = 2;
 
     // wait for FCU connection
     while (ros::ok() && !current_state.connected) {
         ros::spinOnce();
         rate.sleep();
     }
+
+    int ReadyForTakeoff = 0;
+    printf("Check parameters above!!! Put 1 to continue:");
+    scanf("%d", &ReadyForTakeoff);
+    if (ReadyForTakeoff == 1) {
+        printf("Takeoff!\n");
+    } else {
+        printf("Not ready! Wrong input!\n");
+        return 0;
+    }
+    // geometry_msgs::PoseStamped pose;
     ROS_INFO("offb_node started");
     double px[5], py[5];
 
-    geometry_msgs::PoseStamped pose;
+    geometry_msgs::PoseStamped pose, goal_pose;
     geometry_msgs::Twist vel;
-
-    int order[5] = {1, 2, 3, 4, 5};
-    int where[20] = {0};
-    char destination;
-    int now_pos = 0;
 
     vel.linear.x = 0;
     vel.linear.y = 0;
@@ -282,6 +297,9 @@ int main(int argc, char** argv) {
     pose.pose.orientation.x = 0;
     pose.pose.orientation.y = 0;
     pose.pose.orientation.z = 0;
+    pose.header.frame_id = "map";
+
+    goal_pose = pose;
 
     // send a few setpoints before starting
     // 在切换到offboard模式之前，你必须先发送一些期望点信息到飞控中。不然飞控会拒绝切换到offboard模式。
@@ -299,7 +317,9 @@ int main(int argc, char** argv) {
     arm_cmd.request.value = true;
 
     ros::Time last_request = ros::Time::now();
+    last_detect_time = ros::Time::now();
     state = READY;
+    int now_goal = 1;
 
     while (ros::ok()) {
         switch (state) {
@@ -326,158 +346,141 @@ int main(int argc, char** argv) {
                 local_pos_pub.publish(pose);
                 break;
             case TAKEOFF:
+                static int is_send_goal = 0;
                 ROS_INFO("TAKEOFF NOW");
                 local_pos_pub.publish(pose);
+
+                if (is_send_goal == 0) {
+                    goal_pose.pose.position.x = waypoint[now_goal].x;
+                    goal_pose.pose.position.y = waypoint[now_goal].y;
+                    goal_pose.pose.position.z = 0;
+                    goal_pub.publish(goal_pose);
+                    goal_pub.publish(goal_pose);
+                    is_send_goal = 1;
+                }
+
                 if (std::fabs(z - fly_height) < 0.15 && got_plan) {
-                    state = FIND_QR_MID;
+                    state = GOTO_DROP;
+                    is_send_goal = 0;
                     last_request = ros::Time::now();
                 }
                 break;
-            case FIND_QR_MID:
-                ROS_INFO("GO 1 NOW");
-                // pose.pose.position.x = waypoint[1].x;
-                // pose.pose.position.y = waypoint[1].y;
-                pos_vel(vel, next_point.x, next_point.y);
-
-                ROS_INFO("min_distance : %f", min_distance);
-
-                if (min_distance < 0.8) {
-                    ROS_INFO("DANGER !!!");
-                    vel.linear.x *= min_distance / 0.8;
-                    vel.linear.y *= min_distance / 0.8;
-                }
-
-                // vel.linear.x = dwa_vel_x;
-                // vel.linear.y = dwa_vel_y;
-
-                ROS_INFO("vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
-
-                local_vel_pub.publish(vel);
-
-                // if (isget(waypoint[1], 0.1)) {
-                //     state = SCAN_QR;
-                // }
-                break;
-            case SCAN_QR:
-                ROS_INFO("GO 2 NOW");
-                pos_vel(vel, waypoint[2].x, waypoint[2].y);
-                // ROS_INFO("GO 2 NOW");
-                local_vel_pub.publish(vel);
-
-                if (isget(waypoint[2], 0.1)) {
-                    state = AROUND;
-                }
-                break;
-            case AROUND:
-                ROS_INFO("GO 3 NOW");
-                pos_vel(vel, waypoint[3].x, waypoint[3].y);
-                local_vel_pub.publish(vel);
-                if (isget(waypoint[3], 0.1)) {
-                    ROS_INFO("GET FINAL");
-                }
-                break;
             case GOTO_DROP:
-                static int now_drop = 1;
-                static bool mid_flag = false;
-                if (now_drop == 4) {
-                    state = HOME;
-                    break;
-                }
-                ROS_INFO("GOTO_DROP %d NOW", order[now_drop]);
-                if (mid_point[now_pos][where[order[now_drop]]] == 0)
-                    mid_flag = true;
+                static double precise_x, precise_y;
+                ROS_INFO("GO TO DROP %d NOW", now_goal);
+                pos_vel(vel, next_point.x, next_point.y);
+                // ROS_INFO("min_distance : %f", min_distance);
+                // if (min_distance < 0.8) {
+                //     ROS_INFO("DANGER !!!");
+                //     vel.linear.x *= min_distance / 0.8;
+                //     vel.linear.y *= min_distance / 0.8;
+                // }
+                ROS_INFO("vel_x%f  vel_y%f", vel.linear.x, vel.linear.y);
+                local_vel_pub.publish(vel);
 
-                if (mid_flag) {  // 已经走过中间点，直达目的地
-                    pose.pose.position.x = waypoint[where[order[now_drop]]].x;
-                    pose.pose.position.y = waypoint[where[order[now_drop]]].y;
-                    pose.pose.position.z = fly_height;
-                    local_pos_pub.publish(pose);
-                    if (isget(waypoint[where[order[now_drop]]])) {
-                        now_pos = where[order[now_drop]];
-                        mid_flag = false;
+                if (isget(waypoint[now_goal], 0.5)) {
+                    if (ros::Time::now() - last_detect_time <
+                        ros::Duration(0.5)) {
+                        precise_x = x + target_x;
+                        precise_y = y + target_y;
                         state = DROP;
+                        last_request = ros::Time::now();
+                        break;
                     }
-                } else {  // 还没走过中间点，先走中间点
-                    pose.pose.position.x =
-                        waypoint[mid_point[now_pos][where[order[now_drop]]]].x;
-                    pose.pose.position.y =
-                        waypoint[mid_point[now_pos][where[order[now_drop]]]].y;
-                    pose.pose.position.z = fly_height;
-                    local_pos_pub.publish(pose);
-                    if (isget(waypoint[mid_point[now_pos]
-                                                [where[order[now_drop]]]])) {
-                        mid_flag = true;  // 已经走到中间点
+                }
+
+                if (isget(waypoint[now_goal], 0.10)) {
+                    ROS_INFO("GOT  %d", now_goal);
+                    if (is_send_goal == 0) {
+                        now_goal++;
+                        goal_pose.pose.position.x = waypoint[now_goal].x;
+                        goal_pose.pose.position.y = waypoint[now_goal].y;
+                        goal_pose.pose.position.z = 0;
+                        goal_pub.publish(goal_pose);
+                        goal_pub.publish(goal_pose);
+                        is_send_goal = 1;
                     }
+                } else {
+                    is_send_goal = 0;
                 }
                 break;
 
             case DROP:
-                static bool get_precise = false;
-                static double precise_x, precise_y;
-                ROS_INFO("DROP %d NOW", order[now_drop]);
-                if (!get_precise) {
+                static bool readyForDrop = 0;
+                if (is_visit[number] == 1) {
+                    now_goal++;
+                    state = GOTO_DROP;
+                    break;
+                }
+
+                if (ros::Time::now() - last_detect_time < ros::Duration(0.5)) {
                     precise_x = x + target_x;
                     precise_y = y + target_y;
-                    get_precise = true;
                 }
-                pose.pose.position.x = precise_x;
-                pose.pose.position.y = precise_y;
-                pose.pose.position.z = drop_height;
-                local_pos_pub.publish(pose);
 
-                if (z < drop_height + 0.1) {  // 投放，投放完毕后，进入下一阶段
-                    get_precise = 0;
-                    now_drop++;
-                    mid_flag = false;
-                    std_msgs::String message;
-                    message.data = "drop";
-                    drop_pub.publish(message);
-                    state = GOTO_DROP;
-                }
-                break;
-            case HOME:
-                pose.pose.position.z = fly_height;
-                if (destination == 'l') {
-                    pose.pose.position.x = left_land.x;
-                    pose.pose.position.y = left_land.y;
-                    local_pos_pub.publish(pose);
-                    if (isget(left_land)) {
-                        state = LANDING;
+                if (isget(point(precise_x, precise_y, 0), 0.05) ||
+                    readyForDrop) {
+                    readyForDrop = 1;
+                    pos_vel(vel, precise_x, precise_y, drop_height);
+                    if (fabs(z - drop_height) < 0.05) {
+                        ROS_INFO("DROP %d NOW", number);
+                        std_msgs::String message;
+                        message.data = "drop";
+                        drop_pub.publish(message);
+                        is_visit[number] = 1;
+                        state = GOTO_DROP;
+                        readyForDrop = 0;
+                        last_request = ros::Time::now();
+                        break;
                     }
-                } else {
-                    pose.pose.position.x = right_land.x;
-                    pose.pose.position.y = right_land.y;
-                    local_pos_pub.publish(pose);
-                    if (isget(right_land)) {
-                        state = LANDING;
-                    }
-                }
+                } else
+                    pos_vel(vel, precise_x, precise_y, fly_height);
+
+                local_vel_pub.publish(vel);
                 break;
-            case LANDING:
-                ROS_INFO("LANDING NOW");
-                static point prescise_land{x + target_x, y + target_y};
-                static bool get_prescise_land = false;
-                if (!get_prescise_land) {
-                    prescise_land.x = x + target_x;
-                    prescise_land.y = y + target_y;
-                    get_prescise_land = true;
-                }
-                pose.pose.position.x = prescise_land.x;
-                pose.pose.position.y = prescise_land.y;
-                pose.pose.position.z = 0;
-                local_pos_pub.publish(pose);
-                if (z < 0.2) {
-                    // 切manul模式,上锁停桨
-                    offb_set_mode.request.custom_mode = "MANNUL";
-                    set_mode_client.call(offb_set_mode);
-                    arm_cmd.request.value = false;
-                    arming_client.call(arm_cmd);
-                    state = END;
-                }
-                break;
-            case END:
-                ROS_INFO("MISSION COMPLETE!");
-                break;
+            // case HOME:
+            //     pose.pose.position.z = fly_height;
+            //     if (destination == 'l') {
+            //         pose.pose.position.x = left_land.x;
+            //         pose.pose.position.y = left_land.y;
+            //         local_pos_pub.publish(pose);
+            //         if (isget(left_land)) {
+            //             state = LANDING;
+            //         }
+            //     } else {
+            //         pose.pose.position.x = right_land.x;
+            //         pose.pose.position.y = right_land.y;
+            //         local_pos_pub.publish(pose);
+            //         if (isget(right_land)) {
+            //             state = LANDING;
+            //         }
+            //     }
+            //     break;
+            // case LANDING:
+            //     ROS_INFO("LANDING NOW");
+            //     static point prescise_land{x + target_x, y +
+            //     target_y}; static bool get_prescise_land = false; if
+            //     (!get_prescise_land) {
+            //         prescise_land.x = x + target_x;
+            //         prescise_land.y = y + target_y;
+            //         get_prescise_land = true;
+            //     }
+            //     pose.pose.position.x = prescise_land.x;
+            //     pose.pose.position.y = prescise_land.y;
+            //     pose.pose.position.z = 0;
+            //     local_pos_pub.publish(pose);
+            //     if (z < 0.2) {
+            //         // 切manul模式,上锁停桨
+            //         offb_set_mode.request.custom_mode = "MANNUL";
+            //         set_mode_client.call(offb_set_mode);
+            //         arm_cmd.request.value = false;
+            //         arming_client.call(arm_cmd);
+            //         state = END;
+            //     }
+            //     break;
+            // case END:
+            //     ROS_INFO("MISSION COMPLETE!");
+            //     break;
             default:
                 break;
         }

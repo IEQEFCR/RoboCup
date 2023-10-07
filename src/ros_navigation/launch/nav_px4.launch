@@ -14,7 +14,7 @@
 
   <!-- rviz -->
   <group if="$(arg open_rviz)">
-    <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find ros_navigation)/rviz/ros_navigation.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find ros_navigation)/rviz/ros_navigation.rviz"/>
   </group>
 
 </launch>

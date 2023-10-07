@@ -1,5 +1,7 @@
 <?xml version="1.0"?>
 <launch>
+    <node pkg="tf" type="static_transform_publisher" name="laser_to_base_link" args="0.0 0.0 0 0.0 0.0 0.0 /base_link /rplidar_link 100" />
+
     <node pkg="offboard" type="odom_tf" respawn="false" name="odom_tf" output="screen">
     </node>
 

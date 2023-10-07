@@ -10,7 +10,7 @@ map_type: costmap
 observation_sources: scan
 scan:
   {
-    sensor_frame: base_laser,
+    sensor_frame: rplidar_link,
     data_type: LaserScan,
     topic: /scan,
     marking: true,

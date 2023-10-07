@@ -3,8 +3,8 @@
     <include file="$(find offboard)/launch/tf.launch">
     </include>
 
-    <include file="$(find ldlidar_stl_ros)/launch/ld06.launch">
-    </include>
+    <!-- <include file="$(find ldlidar_stl_ros)/launch/ld06.launch"> -->
+    <!-- </include> -->
 
     <rosparam command="load" file="$(find offboard)/config/waypoint_list.yaml" />
 
