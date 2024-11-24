@@ -1,6 +1,10 @@
 #include <cstdio>
 #include <thread>
 
+void newFunction() {
+    printf("This is a new function\n");
+}
+
 int main() {
     // std::cout << "Hello, RoboCup!" << std::endl;
     // main add a new line
