@@ -7,6 +7,5 @@ int main() {
     // add a new line
     b add a new line;
     b add a new line;
-
-    return 0;
+    b add a new line;
 }
